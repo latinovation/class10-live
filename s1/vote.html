@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vote</title>
+<link rel="stylesheet" href="../style.css">
+<script src="../config.js"></script>
+<script src="../live.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>Vote</h1>
+  <p class="sub">Look at the six concepts on the board, C1 to C6.</p>
+
+  <h2>Vote 1: which three came from the same brief?</h2>
+  <div class="card">
+    <p>Tap three.</p>
+    <div class="pick" id="pick1"></div>
+    <p class="row" style="margin-top:14px"><button class="btn" id="send1">Send vote 1</button> <span id="msg1"></span></p>
+  </div>
+
+  <h2>Vote 2: which one would you run?</h2>
+  <div class="card">
+    <p>Tap one.</p>
+    <div class="pick" id="pick2"></div>
+    <p class="row" style="margin-top:14px"><button class="btn" id="send2">Send vote 2</button> <span id="msg2"></span></p>
+  </div>
+</div>
+<script>
+(function () {
+  var labels = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'];
+  var picks1 = {}, pick2 = null;
+  var p1 = document.getElementById('pick1'), p2 = document.getElementById('pick2');
+  labels.forEach(function (l) {
+    var b1 = document.createElement('button'); b1.textContent = l;
+    b1.addEventListener('click', function () {
+      if (picks1[l]) { delete picks1[l]; b1.classList.remove('on'); return; }
+      if (Object.keys(picks1).length >= 3) return;
+      picks1[l] = true; b1.classList.add('on');
+    });
+    p1.appendChild(b1);
+    var b2 = document.createElement('button'); b2.textContent = l;
+    b2.addEventListener('click', function () {
+      pick2 = l; Array.prototype.forEach.call(p2.children, function (c) { c.classList.toggle('on', c === b2); });
+    });
+    p2.appendChild(b2);
+  });
+  function wire(btnId, msgId, build) {
+    var btn = document.getElementById(btnId), msg = document.getElementById(msgId);
+    btn.addEventListener('click', function () {
+      var payload = build();
+      if (!payload) { msg.className = 'err'; msg.textContent = btnId === 'send1' ? 'Tap exactly three.' : 'Tap one.'; return; }
+      btn.disabled = true; msg.className = ''; msg.textContent = 'Sending...';
+      LIVE.send('s1', payload).then(function () { msg.className = 'ok'; msg.textContent = 'Counted.'; })
+        .catch(function () { btn.disabled = false; msg.className = 'err'; msg.textContent = 'Could not reach the board. Try again.'; });
+    });
+  }
+  wire('send1', 'msg1', function () { var k = Object.keys(picks1).sort(); return k.length === 3 ? { type: 'vote1', picks: k, t: Date.now() } : null; });
+  wire('send2', 'msg2', function () { return pick2 ? { type: 'vote2', pick: pick2, t: Date.now() } : null; });
+})();
+</script>
+</body>
+</html>

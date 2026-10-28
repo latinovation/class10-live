@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Score the ad</title>
+<link rel="stylesheet" href="../style.css">
+<script src="../config.js"></script>
+<script src="../live.js"></script>
+<script src="ads.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>Score the ad with DIRECTS</h1>
+  <p class="sub">0 = no · 1 = partly · 2 = clearly. Score the ad on the screen; the board tells you which one.</p>
+
+  <h2>Which ad?</h2>
+  <div class="pick" id="adPick" style="grid-template-columns: repeat(4, 1fr)"></div>
+  <div class="card" id="adInfo"><p class="note">Pick the ad the board is showing.</p></div>
+
+  <div id="form" class="hidden">
+    <h2>Gut reaction (one word)</h2>
+    <input type="text" id="gut" maxlength="30" placeholder="Optional. What you wrote on paper." autocomplete="off">
+
+    <h2>The seven letters</h2>
+    <div id="letters"></div>
+
+    <div id="ieBox" class="hidden">
+      <h2>The idea is...</h2>
+      <div class="pick" id="iePick"></div>
+    </div>
+
+    <h2>Your lowest letter, and why</h2>
+    <div class="row">
+      <select id="lowest" style="width:auto"><option value="">Letter</option><option>D</option><option>I</option><option>R</option><option>E</option><option>C</option><option>T</option><option>S</option></select>
+      <input type="text" id="why" maxlength="160" placeholder="One line of evidence (optional)" style="flex:1" autocomplete="off">
+    </div>
+    <label for="team" style="margin-top:16px">Team (optional)</label>
+    <input type="text" id="team" maxlength="30" autocomplete="off">
+    <p class="row" style="margin-top:18px"><button class="btn teal" id="send">Send my scores</button> <span id="msg"></span></p>
+  </div>
+</div>
+<script>
+(function () {
+  var ad = null, scores = {}, ie = '';
+  var adPick = document.getElementById('adPick');
+  [1, 2, 3, 4].forEach(function (n) {
+    var b = document.createElement('button'); b.textContent = ADS[n].short;
+    b.addEventListener('click', function () { selectAd(n, b); });
+    adPick.appendChild(b);
+  });
+  function selectAd(n, btn) {
+    ad = n; scores = {}; ie = '';
+    Array.prototype.forEach.call(adPick.children, function (c) { c.classList.toggle('on', c === btn); });
+    document.getElementById('adInfo').innerHTML = '<b>' + LIVE.esc(ADS[n].title) + '</b> <span class="note">(' + LIVE.esc(ADS[n].year) + ')</span><p><b>Reread the brief:</b> ' + LIVE.esc(ADS[n].brief) + '</p>';
+    document.getElementById('form').classList.remove('hidden');
+    document.getElementById('ieBox').classList.toggle('hidden', !ADS[n].ie);
+    buildLetters(); buildIe();
+    document.getElementById('msg').textContent = ''; document.getElementById('send').disabled = false;
+    document.getElementById('gut').value = ''; document.getElementById('lowest').value = ''; document.getElementById('why').value = '';
+  }
+  function buildLetters() {
+    var el = document.getElementById('letters'); el.innerHTML = '';
+    LETTERS.forEach(function (L) {
+      var card = document.createElement('div'); card.className = 'card';
+      card.innerHTML = '<b>' + L.L + ' · ' + LIVE.esc(L.name) + '</b><div class="note">' + LIVE.esc(L.q) + '</div><div class="seg"></div>';
+      var seg = card.querySelector('.seg');
+      [0, 1, 2].forEach(function (v) {
+        var b = document.createElement('button'); b.textContent = v;
+        b.addEventListener('click', function () { scores[L.L] = v; Array.prototype.forEach.call(seg.children, function (c, i) { c.classList.toggle('on', i === v); }); });
+        seg.appendChild(b);
+      });
+      el.appendChild(card);
+    });
+  }
+  function buildIe() {
+    var el = document.getElementById('iePick'); el.innerHTML = '';
+    [['idea', 'Stronger than the execution'], ['equal', 'About equal'], ['execution', 'Weaker than the execution']].forEach(function (o) {
+      var b = document.createElement('button'); b.textContent = o[1]; b.style.fontSize = '.9rem';
+      b.addEventListener('click', function () { ie = o[0]; Array.prototype.forEach.call(el.children, function (c) { c.classList.toggle('on', c === b); }); });
+      el.appendChild(b);
+    });
+  }
+  document.getElementById('send').addEventListener('click', function () {
+    var msg = document.getElementById('msg'), btn = document.getElementById('send');
+    var missing = LETTERS.filter(function (L) { return scores[L.L] === undefined; }).map(function (L) { return L.L; });
+    if (missing.length) { msg.className = 'err'; msg.textContent = 'Score every letter. Missing: ' + missing.join(', '); return; }
+    if (ADS[ad].ie && !ie) { msg.className = 'err'; msg.textContent = 'Answer "The idea is..." too.'; return; }
+    btn.disabled = true; msg.className = ''; msg.textContent = 'Sending...';
+    LIVE.send('s2', { type: 'score', ad: ad, scores: scores, gut: document.getElementById('gut').value.trim(), lowest: document.getElementById('lowest').value, why: document.getElementById('why').value.trim(), ie: ie, team: document.getElementById('team').value.trim(), t: Date.now() })
+      .then(function () { msg.className = 'ok'; msg.textContent = 'Sent. Watch the board. Pick the next ad when it comes up.'; window.scrollTo(0, 0); })
+      .catch(function () { btn.disabled = false; msg.className = 'err'; msg.textContent = 'Could not reach the board. Try again, or score on paper.'; });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team half sheets</title>
+<link rel="stylesheet" href="../style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="../config.js"></script>
+<script src="../live.js"></script>
+<style>
+  .sheet { background: #fff; border: 1px dashed #999; border-radius: 8px; padding: 20px; display: flex; gap: 24px; align-items: center; margin: 12px 0; page-break-inside: avoid; }
+  .sheet h2 { margin: 0 0 6px; }
+  .sheet .u { font-family: ui-monospace, Menlo, monospace; font-size: 1rem; color: var(--navy); word-break: break-all; }
+  @media print { .noprint { display: none; } body { background: #fff; } .wrap { max-width: none; } .sheet { height: 46vh; margin: 0 0 2vh; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="noprint sub">Print this page (two sheets per page). Hand each team its sheet face down. Odd teams get Brief 1, even teams Brief 2. <button class="btn ghost" onclick="window.print()">Print</button></p>
+  <div id="sheets"></div>
+</div>
+<script>
+(function () {
+  var base = (window.SITE_URL || (location.origin + location.pathname.replace(/s1\/.*$/, ''))) + 's1/team.html?b=';
+  var k = LIVE.key !== window.LIVE_KEY ? '&k=' + LIVE.key : '';
+  var html = '';
+  for (var t = 1; t <= 6; t++) {
+    var b = t % 2 === 1 ? 1 : 2, url = base + b + k;
+    html += '<div class="sheet"><div class="qr" id="q' + t + '"></div><div><h2>Team ' + t + '</h2><p>Scan to open your brief and the prompt. Everyone on the team can open it.</p><p>Do not look at another team\'s sheet.</p><p class="u">' + LIVE.esc(url.replace(/^https?:\/\//, '')) + '</p></div></div>';
+  }
+  document.getElementById('sheets').innerHTML = html;
+  for (var t2 = 1; t2 <= 6; t2++) LIVE.qr(document.getElementById('q' + t2), base + (t2 % 2 === 1 ? 1 : 2) + k, 200);
+})();
+</script>
+</body>
+</html>

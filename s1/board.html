@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board: brief vs outcome</title>
+<link rel="stylesheet" href="../style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="../config.js"></script>
+<script src="../live.js"></script>
+<script src="briefs.js"></script>
+</head>
+<body class="board">
+<div class="status" id="status">connecting</div>
+<div class="wrap">
+  <div class="bar">
+    <button class="btn on" data-view="gallery">1 Concepts</button>
+    <button class="btn" data-view="vote1">2 Vote 1</button>
+    <button class="btn" data-view="vote2">3 Vote 2</button>
+    <button class="btn" data-view="reveal">4 Reveal</button>
+    <button class="btn" data-view="qr">Q Vote QR</button>
+    <span class="kbd">V unveil all · N cover the name · M add by hand · X export · <span id="count">0 of 6 concepts</span></span>
+  </div>
+
+  <section id="v-gallery">
+    <p class="kbd">Click a card to unveil it. Concepts are shuffled and unsigned.</p>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section id="v-vote1" class="hidden">
+    <h2>Vote 1: which three came from the same brief? <span class="kbd" id="n1"></span></h2>
+    <div class="tally" id="tally1"></div>
+    <p class="kbd" id="exact"></p>
+  </section>
+
+  <section id="v-vote2" class="hidden">
+    <h2>Vote 2: which one would you run? <span class="kbd" id="n2"></span></h2>
+    <div class="tally" id="tally2"></div>
+  </section>
+
+  <section id="v-reveal" class="hidden">
+    <div class="split">
+      <div class="col a">
+        <h2>Brief A: what the client sent</h2>
+        <div class="brief" id="briefA"></div>
+        <div id="concA" style="margin-top:14px"></div>
+      </div>
+      <div class="col b">
+        <h2>Brief B: the one-page brief</h2>
+        <div class="brief" id="briefB"></div>
+        <div id="concB" style="margin-top:14px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="v-qr" class="hidden">
+    <h2>Vote on your phone</h2>
+    <div class="qrbox"><div class="qr" id="qrVote"></div><div><div class="u" id="urlVote"></div><p>Vote 1: tap the three concepts you think share a brief.<br>Vote 2: tap the one you would run.</p></div></div>
+  </section>
+
+  <section id="v-manual" class="hidden">
+    <div class="card">
+      <h3>Add a concept by hand (fallback)</h3>
+      <div class="row">
+        <select id="mTeam"><option value="">Team</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+        <input type="text" id="mHead" placeholder="HEADLINE" style="flex:1">
+      </div>
+      <input type="text" id="mBody" placeholder="BODY LINE" style="margin-top:8px">
+      <textarea id="mPic" placeholder="PICTURE" style="margin-top:8px"></textarea>
+      <p class="row"><button class="btn teal" id="mAdd">Add to the board</button> <button class="btn ghost" id="mClose">Close</button> <span class="note">Odd teams are Brief 1 (A), even teams Brief 2 (B).</span></p>
+    </div>
+  </section>
+</div>
+<script>
+(function () {
+  var E = LIVE.esc;
+  var perm = LIVE.permutation(6);           // perm[i] = team shown as C(i+1)
+  function labelOf(team) { return 'C' + (perm.indexOf(team) + 1); }
+  var concepts = {};                        // team -> concept (latest wins)
+  var votes1 = [], votes2 = [];
+  var unveiled = {}, veilAll = true, coverName = false, revealedVotes = false;
+  var view = 'gallery';
+
+  function cover(s) { return coverName ? String(s).replace(/hydra\s?lift/gi, '■■■■■') : s; }
+  function kindOf(team) { return team % 2 === 1 ? 'A' : 'B'; }
+  function labelKinds() { var m = {}; for (var t = 1; t <= 6; t++) m[labelOf(t)] = '<span class="kbd">' + kindOf(t) + '</span>'; return m; }
+
+  function renderGallery() {
+    var html = '';
+    for (var i = 1; i <= 6; i++) {
+      var lbl = 'C' + i, team = perm[i - 1], c = concepts[team];
+      if (!c) { html += '<div class="c"><div class="lbl">' + lbl + '</div><p class="note" style="margin-top:40px;text-align:center">waiting</p></div>'; continue; }
+      var veil = veilAll && !unveiled[lbl];
+      html += '<div class="c' + (veil ? ' veil' : '') + (revealedVotes ? ' ' + kindOf(team).toLowerCase() : '') + '" data-lbl="' + lbl + '"><div class="lbl">' + lbl + '</div>' +
+        '<h3>' + E(cover(c.headline)) + '</h3><div class="body">' + E(cover(c.body)) + '</div><div class="pic">' + E(cover(c.picture)) + '</div></div>';
+    }
+    document.getElementById('cards').innerHTML = html;
+    document.getElementById('count').textContent = Object.keys(concepts).length + ' of 6 concepts';
+  }
+
+  function bars(el, counts, order, mark) {
+    var max = 0; order.forEach(function (k) { max = Math.max(max, counts[k] || 0); });
+    el.innerHTML = order.map(function (k) {
+      var n = counts[k] || 0, w = max ? Math.round(100 * n / max) : 0;
+      return '<div class="hbar"><div>' + E(k) + (mark && mark[k] ? ' ' + mark[k] : '') + '</div><div class="track"><div class="fill" style="width:' + w + '%"></div></div><div>' + n + '</div></div>';
+    }).join('');
+  }
+
+  function renderVotes() {
+    var c1 = {}; votes1.forEach(function (v) { var k = v.picks.join(' + '); c1[k] = (c1[k] || 0) + 1; });
+    var keys = Object.keys(c1).sort(function (a, b) { return c1[b] - c1[a]; }).slice(0, 6);
+    var setA = [], setB = [];
+    for (var t = 1; t <= 6; t++) (kindOf(t) === 'A' ? setA : setB).push(labelOf(t));
+    var keyA = setA.sort().join(' + '), keyB = setB.sort().join(' + ');
+    var mark = {}; if (revealedVotes) { mark[keyA] = '<span class="kbd">= Brief A</span>'; mark[keyB] = '<span class="kbd">= Brief B</span>'; }
+    bars(document.getElementById('tally1'), c1, keys, mark);
+    document.getElementById('n1').textContent = votes1.length + ' votes';
+    var exact = (c1[keyA] || 0) + (c1[keyB] || 0);
+    document.getElementById('exact').textContent = revealedVotes ? exact + ' of ' + votes1.length + ' picked a brief\'s three exactly.' : 'Press 4 (reveal) to mark the true groupings.';
+    var c2 = {}; votes2.forEach(function (v) { c2[v.pick] = (c2[v.pick] || 0) + 1; });
+    bars(document.getElementById('tally2'), c2, ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'], revealedVotes ? labelKinds() : null);
+    document.getElementById('n2').textContent = votes2.length + ' votes';
+  }
+
+  function highlightA(text) {
+    var h = E(text);
+    BRIEF_A_BENEFITS.forEach(function (b, i) { h = h.replace(E(b), '<mark class="b' + (i + 1) + '">' + E(b) + '</mark>'); });
+    return h;
+  }
+  function renderReveal() {
+    document.getElementById('briefA').innerHTML = highlightA(BRIEFS[1].text);
+    document.getElementById('briefB').innerHTML = E(BRIEFS[2].text).replace(E(BRIEF_B_SMP), '<mark class="smp">' + E(BRIEF_B_SMP) + '</mark>');
+    var a = '', b = '';
+    for (var t = 1; t <= 6; t++) {
+      var c = concepts[t]; if (!c) continue;
+      var card = '<div class="card"><b>' + labelOf(t) + '</b> · <b>' + E(cover(c.headline)) + '</b><br>' + E(cover(c.body)) + '<br><span class="note">' + E(cover(c.picture)) + '</span></div>';
+      if (kindOf(t) === 'A') a += card; else b += card;
+    }
+    document.getElementById('concA').innerHTML = a || '<p class="note">No Brief A concepts yet.</p>';
+    document.getElementById('concB').innerHTML = b || '<p class="note">No Brief B concepts yet.</p>';
+  }
+
+  function show(v) {
+    view = v;
+    ['gallery', 'vote1', 'vote2', 'reveal', 'qr', 'manual'].forEach(function (x) { document.getElementById('v-' + x).classList.toggle('hidden', x !== v); });
+    Array.prototype.forEach.call(document.querySelectorAll('.bar [data-view]'), function (b) { b.classList.toggle('on', b.getAttribute('data-view') === v); });
+    if (v === 'reveal') { revealedVotes = true; veilAll = false; renderGallery(); renderReveal(); }
+    if (v === 'vote1' || v === 'vote2') renderVotes();
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.bar [data-view]'), function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-view')); }); });
+  document.getElementById('cards').addEventListener('click', function (e) {
+    var card = e.target.closest('.c'); if (!card || !card.getAttribute('data-lbl')) return;
+    unveiled[card.getAttribute('data-lbl')] = true; renderGallery();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    var k = e.key.toLowerCase();
+    if (k === '1') show('gallery'); else if (k === '2') show('vote1'); else if (k === '3') show('vote2'); else if (k === '4') show('reveal');
+    else if (k === 'q') show('qr'); else if (k === 'm') show('manual');
+    else if (k === 'v') { veilAll = !veilAll; renderGallery(); }
+    else if (k === 'n') { coverName = !coverName; renderGallery(); renderReveal(); }
+    else if (k === 'x') LIVE.download('class10-session1-' + LIVE.key + '.json', { concepts: concepts, votes1: votes1, votes2: votes2, labels: perm });
+  });
+  document.getElementById('mAdd').addEventListener('click', function () {
+    var team = Number(document.getElementById('mTeam').value);
+    if (!team) return;
+    concepts[team] = { team: team, brief: team % 2 === 1 ? 1 : 2, headline: document.getElementById('mHead').value, body: document.getElementById('mBody').value, picture: document.getElementById('mPic').value, manual: true };
+    renderGallery(); show('gallery');
+  });
+  document.getElementById('mClose').addEventListener('click', function () { show('gallery'); });
+
+  var voteUrl = (window.SITE_URL || (location.origin + location.pathname.replace(/s1\/.*$/, ''))) + 's1/vote.html' + (LIVE.key !== window.LIVE_KEY ? '?k=' + LIVE.key : '');
+  document.getElementById('urlVote').textContent = voteUrl.replace(/^https?:\/\//, '');
+  LIVE.qr(document.getElementById('qrVote'), voteUrl, 260);
+
+  var st = document.getElementById('status');
+  LIVE.listen('s1', function (d) {
+    if (d.type === 'concept' && d.team >= 1 && d.team <= 6) { concepts[d.team] = d; renderGallery(); if (view === 'reveal') renderReveal(); }
+    else if (d.type === 'vote1' && Array.isArray(d.picks) && d.picks.length === 3) { votes1.push(d); if (view === 'vote1') renderVotes(); }
+    else if (d.type === 'vote2' && d.pick) { votes2.push(d); if (view === 'vote2') renderVotes(); }
+  }, function (s) { st.textContent = s === 'live' ? 'live' : s === 'polling' ? 'polling every 15 s' : 'relay offline (press M to add by hand)'; st.className = 'status ' + (s === 'live' ? 'live' : s === 'offline' ? 'off' : ''); });
+  renderGallery();
+})();
+</script>
+</body>
+</html>

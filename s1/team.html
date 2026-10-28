@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your brief</title>
+<link rel="stylesheet" href="../style.css">
+<script src="../config.js"></script>
+<script src="../live.js"></script>
+<script src="briefs.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title">Your brief</h1>
+  <p class="sub">Everyone in the room is writing for the same client. Do not look at another team's page.</p>
+
+  <h2>1. Read the brief</h2>
+  <div class="card brief" id="brief"></div>
+
+  <h2>2. Ask Claude for one concept</h2>
+  <p>Open a <strong>brand-new chat</strong> in Claude (no project, no earlier conversation). Tap the button, paste, send. Take the <strong>first</strong> answer as it comes: no edits, no second try.</p>
+  <p class="row"><button class="btn teal" id="copy">Copy the prompt and brief</button> <span id="copied" class="ok"></span></p>
+  <details><summary class="note">See the prompt</summary><pre id="prompt"></pre></details>
+  <p class="note">If Claude asks a question instead of answering, reply "No questions. Use the brief only." and take that answer.</p>
+
+  <h2>3. Send the concept to the board</h2>
+  <div class="card">
+    <label for="team">Team number</label>
+    <select id="team"><option value="">Choose</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+    <label for="headline">HEADLINE</label>
+    <input type="text" id="headline" maxlength="120" autocomplete="off">
+    <label for="body">BODY LINE</label>
+    <input type="text" id="body" maxlength="240" autocomplete="off">
+    <label for="picture">PICTURE</label>
+    <textarea id="picture" maxlength="600"></textarea>
+    <p class="row" style="margin-top:14px"><button class="btn" id="send">Send to the board</button> <span id="msg"></span></p>
+  </div>
+  <p class="note">One submission per team. Paste Claude's three lines exactly as they came.</p>
+</div>
+<script>
+(function () {
+  var b = new URLSearchParams(location.search).get('b');
+  var brief = BRIEFS[b];
+  if (!brief) { document.getElementById('brief').textContent = 'Open this page from your team\'s QR code (it ends in b=1 or b=2).'; return; }
+  document.getElementById('title').textContent = brief.label;
+  document.title = brief.label;
+  document.getElementById('brief').textContent = brief.text;
+  var full = PROMPT + brief.text;
+  document.getElementById('prompt').textContent = full;
+
+  document.getElementById('copy').addEventListener('click', function () {
+    var done = function () { document.getElementById('copied').textContent = 'Copied. Now paste it into a new Claude chat.'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(full).then(done, function () { fallback(); });
+    else fallback();
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = full; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { document.getElementById('copied').textContent = 'Copy failed: open "See the prompt" and copy by hand.'; }
+      document.body.removeChild(ta);
+    }
+  });
+
+  var sendBtn = document.getElementById('send');
+  sendBtn.addEventListener('click', function () {
+    var team = document.getElementById('team').value;
+    var headline = document.getElementById('headline').value.trim();
+    var body = document.getElementById('body').value.trim();
+    var picture = document.getElementById('picture').value.trim();
+    var msg = document.getElementById('msg');
+    if (!team || !headline || !body || !picture) { msg.className = 'err'; msg.textContent = 'Fill in the team number and all three lines.'; return; }
+    sendBtn.disabled = true; msg.className = ''; msg.textContent = 'Sending...';
+    LIVE.send('s1', { type: 'concept', team: Number(team), brief: Number(b), headline: headline, body: body, picture: picture, t: Date.now() })
+      .then(function () { msg.className = 'ok'; msg.textContent = 'Sent. Watch the board.'; })
+      .catch(function () { sendBtn.disabled = false; msg.className = 'err'; msg.textContent = 'Could not reach the board. Check the connection and try again, or read your concept aloud.'; });
+  });
+})();
+</script>
+</body>
+</html>

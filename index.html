@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Class 10 live sessions</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="live.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>Class 10 live sessions</h1>
+  <p class="sub">Instructor page. Students only ever see the pages linked under "Students".</p>
+
+  <h2>Session 1: Mini brief vs outcome</h2>
+  <div class="card">
+    <p><b>Instructor:</b> <a href="s1/board.html">open the board</a> on the projector · <a href="s1/sheets.html">print the six team half sheets</a> (odd teams Brief 1, even teams Brief 2)</p>
+    <p><b>Students:</b> their sheet's QR opens <code>s1/team.html?b=1</code> or <code>?b=2</code>; voting is <code>s1/vote.html</code> (QR on the board, key Q)</p>
+    <p class="note">Board keys: 1 concepts · 2 vote 1 · 3 vote 2 · 4 reveal · V unveil all · N cover the brand name · M add a concept by hand · X export JSON</p>
+  </div>
+
+  <h2>Session 2: Creative quality evaluation</h2>
+  <div class="card">
+    <p><b>Instructor:</b> <a href="s2/board.html">open the board</a> on the projector</p>
+    <p><b>Students:</b> one page for all four ads, <code>s2/score.html</code> (QR on the board, key Q)</p>
+    <p class="note">Board keys: 1 to 4 pick the ad · H hide or show results · E reveal the expected score one letter at a time (Shift+E all) · B scoreboard · W gut words · X export JSON</p>
+    <div class="row" style="margin-top:10px"><div class="qr" id="qrScore"></div><div class="note" id="urlScore"></div></div>
+  </div>
+
+  <h2>Before class</h2>
+  <div class="card">
+    <ol>
+      <li>Open both boards on the room's Wi-Fi. The badge top right should say <b>live</b>. If it says offline, the relay is unreachable: Session 1 falls back to key M (type the concepts in), Session 2 to paper cards and a hand count.</li>
+      <li>Scan one QR with your phone and send a test. It should appear on the board within a second or two.</li>
+      <li>To start a clean room, change <code>LIVE_KEY</code> in <code>config.js</code>, or add <code>?k=anything</code> to every page you open and print the sheets from that address. Test messages expire from the relay after 12 hours anyway.</li>
+    </ol>
+    <p class="note">Relay check: <span id="relay">testing...</span></p>
+  </div>
+</div>
+<script>
+(function () {
+  var u = (window.SITE_URL || (location.origin + location.pathname.replace(/[^/]*$/, ''))) + 's2/score.html';
+  document.getElementById('urlScore').textContent = u;
+  LIVE.qr(document.getElementById('qrScore'), u, 160);
+  fetch('https://ntfy.sh/' + LIVE.topic('ping') + '/json?poll=1&since=1m').then(function (r) { document.getElementById('relay').textContent = r.ok ? 'reachable' : 'HTTP ' + r.status; }).catch(function () { document.getElementById('relay').textContent = 'unreachable from this network'; });
+})();
+</script>
+</body>
+</html>

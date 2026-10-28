@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board: DIRECTS scores</title>
+<link rel="stylesheet" href="../style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="../config.js"></script>
+<script src="../live.js"></script>
+<script src="ads.js"></script>
+</head>
+<body class="board">
+<div class="status" id="status">connecting</div>
+<div class="wrap">
+  <div class="bar">
+    <button class="btn on" data-ad="1">1 CeraVe</button>
+    <button class="btn" data-ad="2">2 Coca-Cola AI</button>
+    <button class="btn" data-ad="3">3 Apple Crush</button>
+    <button class="btn" data-ad="4">4 Heinz (team)</button>
+    <button class="btn" id="bHide">H Hide results</button>
+    <button class="btn" id="bExp">E Reveal expected</button>
+    <button class="btn" id="bBoard">B Scoreboard</button>
+    <button class="btn" id="bQr">Q QR</button>
+    <span class="kbd">W gut words · X export</span>
+  </div>
+
+  <section id="v-ad">
+    <h1 id="adTitle"></h1>
+    <p id="adBrief" style="font-size:1.1rem;color:#cfe3e0"></p>
+    <div class="row" style="justify-content:space-between">
+      <div><span class="kbd">responses</span> <span class="big" id="n">0</span></div>
+      <div><span class="kbd">class average</span> <span class="big" id="avg">–</span><span class="kbd"> / 14</span></div>
+      <div id="expTot" class="hidden"><span class="kbd">expected</span> <span class="big" id="expTotal"></span><span class="kbd"> / 14</span></div>
+    </div>
+    <div id="results">
+      <div class="letters" id="letters"></div>
+      <div id="ieWrap" class="hidden" style="margin-top:18px">
+        <h2>The idea is... <span class="kbd">stronger / equal / weaker than the execution</span></h2>
+        <div class="two" id="ieBar"></div>
+        <p id="ieNote" class="hidden" style="font-size:1.1rem"></p>
+      </div>
+      <div id="words" class="words hidden" style="margin-top:18px"></div>
+      <div id="revealBox" class="card hidden" style="margin-top:18px;font-size:1.15rem"></div>
+    </div>
+    <div id="hiddenMsg" class="hidden" style="margin-top:30px;text-align:center;font-size:1.6rem;color:#cfe3e0">Results hidden until everyone has scored.</div>
+  </section>
+
+  <section id="v-board" class="hidden">
+    <h1>Scoreboard</h1>
+    <table class="score" id="scoreTable"></table>
+  </section>
+
+  <section id="v-qr" class="hidden">
+    <h2>Score on your phone</h2>
+    <div class="qrbox"><div class="qr" id="qrScore"></div><div><div class="u" id="urlScore"></div><p>One page for all the ads. Pick the ad the board shows, score the seven letters, send.</p></div></div>
+  </section>
+</div>
+<script>
+(function () {
+  var E = LIVE.esc;
+  var ad = 1, hidden = false, expN = 0, showWords = false, view = 'ad';
+  var scores = { 1: [], 2: [], 3: [], 4: [] };
+
+  function stats(list) {
+    var out = {};
+    LETTERS.forEach(function (L) {
+      var c = [0, 0, 0], sum = 0, n = 0;
+      list.forEach(function (s) { var v = s.scores[L.L]; if (v === 0 || v === 1 || v === 2) { c[v]++; sum += v; n++; } });
+      var mean = n ? sum / n : 0, varsum = 0;
+      list.forEach(function (s) { var v = s.scores[L.L]; if (v === 0 || v === 1 || v === 2) varsum += (v - mean) * (v - mean); });
+      out[L.L] = { c: c, n: n, mean: mean, sd: n ? Math.sqrt(varsum / n) : 0 };
+    });
+    return out;
+  }
+  function totalMean(list) { var t = 0, n = 0; list.forEach(function (s) { var sum = 0; LETTERS.forEach(function (L) { sum += s.scores[L.L] || 0; }); t += sum; n++; }); return n ? t / n : null; }
+  function expectedTotal(a) { var t = 0; LETTERS.forEach(function (L) { t += ADS[a].expected[L.L]; }); return t; }
+
+  function render() {
+    var A = ADS[ad], list = scores[ad], st = stats(list);
+    document.getElementById('adTitle').textContent = A.short + ': ' + A.title + ' (' + A.year + ')';
+    document.getElementById('adBrief').innerHTML = '<b>Brief:</b> ' + E(A.brief);
+    document.getElementById('n').textContent = list.length;
+    var tm = totalMean(list);
+    document.getElementById('avg').textContent = tm === null ? '–' : tm.toFixed(1);
+    document.getElementById('results').classList.toggle('hidden', hidden);
+    document.getElementById('hiddenMsg').classList.toggle('hidden', !hidden);
+    var spread = LETTERS.map(function (L) { return L.L; }).sort(function (a, b) { return st[b].sd - st[a].sd; }).slice(0, 2);
+    var html = '';
+    LETTERS.forEach(function (L, i) {
+      var s = st[L.L], n = s.n || 1;
+      var h = [0, 1, 2].map(function (v) { return Math.round(140 * s.c[v] / n); });
+      var isSpread = list.length >= 5 && spread.indexOf(L.L) >= 0 && s.sd > 0.45;
+      var exp = i < expN ? '<b>' + A.expected[L.L] + '</b> ' + E(A.evidence[L.L]) : '';
+      html += '<div class="letter' + (isSpread ? ' spread' : '') + '"><div class="L">' + L.L + '</div><div class="name">' + E(L.name) + '</div>' +
+        '<div class="stack"><div class="s0" style="height:' + h[0] + 'px">' + (s.c[0] ? s.c[0] : '') + '</div><div class="s1" style="height:' + h[1] + 'px">' + (s.c[1] ? s.c[1] : '') + '</div><div class="s2" style="height:' + h[2] + 'px">' + (s.c[2] ? s.c[2] : '') + '</div></div>' +
+        '<div class="mean">' + (s.n ? s.mean.toFixed(1) : '–') + '</div><div class="exp">' + exp + '</div></div>';
+    });
+    document.getElementById('letters').innerHTML = html;
+    var full = expN >= LETTERS.length;
+    document.getElementById('expTot').classList.toggle('hidden', !full);
+    document.getElementById('expTotal').textContent = expectedTotal(ad);
+    var rb = document.getElementById('revealBox'); rb.classList.toggle('hidden', !full); rb.innerHTML = '<b>What happened:</b> ' + E(A.reveal);
+    var iw = document.getElementById('ieWrap'); iw.classList.toggle('hidden', !A.ie);
+    if (A.ie) {
+      var c = { idea: 0, equal: 0, execution: 0 }; list.forEach(function (s) { if (c[s.ie] !== undefined) c[s.ie]++; });
+      var tot = c.idea + c.equal + c.execution || 1;
+      document.getElementById('ieBar').innerHTML = '<div class="i" style="width:' + (100 * c.idea / tot) + '%">' + (c.idea ? 'idea stronger ' + c.idea : '') + '</div><div class="q" style="width:' + (100 * c.equal / tot) + '%">' + (c.equal ? 'equal ' + c.equal : '') + '</div><div class="e" style="width:' + (100 * c.execution / tot) + '%">' + (c.execution ? 'execution stronger ' + c.execution : '') + '</div>';
+      var note = document.getElementById('ieNote'); note.classList.toggle('hidden', !full); note.textContent = A.ieNote || '';
+    }
+    var w = document.getElementById('words'); w.classList.toggle('hidden', !showWords);
+    if (showWords) {
+      var wc = {}; list.forEach(function (s) { var g = (s.gut || '').toLowerCase().trim(); if (g) wc[g] = (wc[g] || 0) + 1; });
+      w.innerHTML = Object.keys(wc).sort(function (a, b) { return wc[b] - wc[a]; }).map(function (k) { return '<span>' + E(k) + (wc[k] > 1 ? ' ×' + wc[k] : '') + '</span>'; }).join('') || '<span class="kbd">no gut words yet</span>';
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('.bar [data-ad]'), function (b) { b.classList.toggle('on', Number(b.getAttribute('data-ad')) === ad); });
+    document.getElementById('bHide').textContent = hidden ? 'H Show results' : 'H Hide results';
+  }
+  function renderBoard() {
+    var html = '<tr><th>Ad</th><th>Responses</th><th>Class average</th><th>Expected</th><th>Gap</th></tr>';
+    [1, 2, 3, 4].forEach(function (a) {
+      var tm = totalMean(scores[a]), ex = expectedTotal(a);
+      html += '<tr><td>' + E(ADS[a].short + ': ' + ADS[a].title) + '</td><td>' + scores[a].length + '</td><td>' + (tm === null ? '–' : tm.toFixed(1)) + '</td><td>' + ex + '</td><td>' + (tm === null ? '–' : (tm - ex > 0 ? '+' : '') + (tm - ex).toFixed(1)) + '</td></tr>';
+    });
+    document.getElementById('scoreTable').innerHTML = html;
+  }
+  function show(v) { view = v; ['ad', 'board', 'qr'].forEach(function (x) { document.getElementById('v-' + x).classList.toggle('hidden', x !== v); }); if (v === 'board') renderBoard(); }
+  function setAd(a) { ad = a; expN = 0; show('ad'); render(); }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.bar [data-ad]'), function (b) { b.addEventListener('click', function () { setAd(Number(b.getAttribute('data-ad'))); }); });
+  document.getElementById('bHide').addEventListener('click', function () { hidden = !hidden; render(); });
+  document.getElementById('bExp').addEventListener('click', function () { expN = Math.min(LETTERS.length, expN + 1); show('ad'); render(); });
+  document.getElementById('bBoard').addEventListener('click', function () { show(view === 'board' ? 'ad' : 'board'); });
+  document.getElementById('bQr').addEventListener('click', function () { show(view === 'qr' ? 'ad' : 'qr'); });
+  document.addEventListener('keydown', function (e) {
+    if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    var k = e.key.toLowerCase();
+    if (k >= '1' && k <= '4') setAd(Number(k));
+    else if (k === 'h') { hidden = !hidden; render(); }
+    else if (k === 'e') { expN = e.shiftKey ? LETTERS.length : Math.min(LETTERS.length, expN + 1); show('ad'); render(); }
+    else if (k === 'b') show(view === 'board' ? 'ad' : 'board');
+    else if (k === 'q') show(view === 'qr' ? 'ad' : 'qr');
+    else if (k === 'w') { showWords = !showWords; render(); }
+    else if (k === 'x') LIVE.download('class10-session2-' + LIVE.key + '.json', scores);
+  });
+
+  var scoreUrl = (window.SITE_URL || (location.origin + location.pathname.replace(/s2\/.*$/, ''))) + 's2/score.html' + (LIVE.key !== window.LIVE_KEY ? '?k=' + LIVE.key : '');
+  document.getElementById('urlScore').textContent = scoreUrl.replace(/^https?:\/\//, '');
+  LIVE.qr(document.getElementById('qrScore'), scoreUrl, 260);
+
+  var stEl = document.getElementById('status');
+  LIVE.listen('s2', function (d) {
+    if (d.type === 'score' && ADS[d.ad] && d.scores) { scores[d.ad].push(d); if (view === 'board') renderBoard(); else if (d.ad === ad) render(); }
+  }, function (s) { stEl.textContent = s === 'live' ? 'live' : s === 'polling' ? 'polling every 15 s' : 'relay offline'; stEl.className = 'status ' + (s === 'live' ? 'live' : s === 'offline' ? 'off' : ''); });
+  render();
+})();
+</script>
+</body>
+</html>
