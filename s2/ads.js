@@ -13,7 +13,7 @@ window.LETTERS = [
 
 window.ADS = {
   1: {
-    short: 'Ad 1', title: 'CeraVe, "Michael CeraVe"', year: '2024, Super Bowl',
+    short: 'Ad 1', title: 'CeraVe, the Super Bowl spot', year: '2024',
     brief: 'Win attention in the Super Bowl for a skincare brand whose claim is "developed with dermatologists."',
     expected: { D: 2, I: 2, R: 2, E: 2, C: 1, T: 2, S: 2 },
     evidence: {
@@ -23,26 +23,26 @@ window.ADS = {
       E: 'Deadpan awkwardness lands; the boardroom pacing delivers the laugh.',
       C: 'It rides a joke people already made online, not a human truth about skin.',
       T: 'The close restates the core claim, and the product is on screen.',
-      S: 'One thought: no, Michael Cera did not make this.'
+      S: 'One thought: no, the actor did not make this.'
     },
     reveal: 'Ogilvy. Cannes Lions 2024 Grand Prix (Social & Influencer). Super Clio 2024 for the best Super Bowl ad. Three weeks of a planted rumour, then the ad debunked it.',
     ie: false
   },
   2: {
-    short: 'Ad 2', title: 'Coca-Cola, AI "Holidays Are Coming"', year: '2024',
-    brief: 'Bring the 1995 "Holidays Are Coming" trucks back for today\'s audience.',
-    expected: { D: 1, I: 1, R: 2, E: 1, C: 1, T: 2, S: 2 },
+    short: 'Ad 2', title: 'Peloton, "The Gift That Gives Back"', year: '2019',
+    brief: 'Make the bike the holiday gift that changes someone\'s year.',
+    expected: { D: 1, I: 0, R: 1, E: 0, C: 0, T: 1, S: 2 },
     evidence: {
-      D: 'The trucks and jingle are Coke\'s; the AI look is the same as any AI ad.',
-      I: 'It produced a large conversation, mostly about the AI itself.',
-      R: 'Red trucks, jingle, bottle: the assets are everywhere.',
-      E: 'Nostalgia was intended; viewers reported "creepy" and "soulless."',
-      C: 'The holiday ritual is human; the faces are not.',
-      T: 'On brand, with no claims to prove.',
-      S: 'Simple to read.'
+      D: 'The home-studio look is the brand\'s; "a gift bike" is a category cliche.',
+      I: 'Parodies were hostile; nothing the brand could extend.',
+      R: 'The bike is shown, but there is no repeatable device.',
+      E: 'Meant to be warm; many viewers felt unease.',
+      C: 'Viewers did not see their lives; they saw pressure.',
+      T: 'On the product, off the empowering brand message.',
+      S: 'One easy story.'
     },
-    reveal: 'Made with generative AI (led by PJ Pereira, Silverside AI). Common reactions: "creepy," "soulless," and that it replaced artists. R and T held; E and C fell.',
-    ie: true, ieNote: 'Idea (update a loved asset) about 11. Execution (the uncanny render) about 8.'
+    reveal: 'December 2019. Viewers called it sexist and said it implied pressure to lose weight. Shares fell as much as 10 percent intraday (Fortune). The company said it was disappointed in how some had misinterpreted the commercial.',
+    ie: true, ieNote: 'Idea (a gift that changes her year) about 8. Execution (the casting, the diary, the thank-you) about 4.'
   },
   3: {
     short: 'Ad 3', title: 'Apple, iPad Pro "Crush!"', year: '2024',
