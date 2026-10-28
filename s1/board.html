@@ -19,8 +19,15 @@
     <button class="btn" data-view="vote2">3 Vote 2</button>
     <button class="btn" data-view="reveal">4 Reveal</button>
     <button class="btn" data-view="qr">Q Vote QR</button>
+    <button class="btn" data-view="images">5 Images</button>
+    <button class="btn" id="gen">G Generate images</button>
     <span class="kbd">V unveil all · N cover the name · M add by hand · X export · <span id="count">0 of 6 concepts</span></span>
   </div>
+
+  <section id="v-images" class="hidden">
+    <p class="kbd" id="genStatus">Each concept's PICTURE and HEADLINE go to Seedream 5.0 Pro unchanged, with the same short wrapper for every team. Press G to generate.</p>
+    <div class="tiles" id="tiles"></div>
+  </section>
 
   <section id="v-gallery">
     <p class="kbd">Click a card to unveil it. Concepts are shuffled and unsigned.</p>
@@ -133,16 +140,133 @@
     var a = '', b = '';
     for (var t = 1; t <= 6; t++) {
       var c = concepts[t]; if (!c) continue;
-      var card = '<div class="card"><b>' + labelOf(t) + '</b> · <b>' + E(cover(c.headline)) + '</b><br>' + E(cover(c.body)) + '<br><span class="note">' + E(cover(c.picture)) + '</span></div>';
+      var thumb = images[t] && images[t].url ? '<img class="thumb" src="' + E(images[t].url) + '" alt="Generated image for ' + labelOf(t) + '">' : '';
+      var card = '<div class="card">' + thumb + '<b>' + labelOf(t) + '</b> · <b>' + E(cover(c.headline)) + '</b><br>' + E(cover(c.body)) + '<br><span class="note">' + E(cover(c.picture)) + '</span></div>';
       if (kindOf(t) === 'A') a += card; else b += card;
     }
     document.getElementById('concA').innerHTML = a || '<p class="note">No Brief A concepts yet.</p>';
     document.getElementById('concB').innerHTML = b || '<p class="note">No Brief B concepts yet.</p>';
   }
 
+  // ---- Images: Seedream 5.0 Pro on Kie, called from this browser only ----
+  // The API key is typed in once per browser tab and kept in sessionStorage on
+  // this laptop. It is never written into the page, the repo or the relay.
+  var KIE = 'https://api.kie.ai/api/v1';
+  var MODEL = 'seedream/5-pro-text-to-image';
+  var images = {};                          // team -> {state, url, msg}
+  var generating = false;
+
+  function kieKey() {
+    var k = null;
+    try { k = sessionStorage.getItem('kieKey'); } catch (e) {}
+    if (!k) {
+      k = window.prompt('Paste your Kie.ai API key. It stays in this browser tab only.');
+      if (!k) return null;
+      k = k.trim();
+      try { sessionStorage.setItem('kieKey', k); } catch (e) {}
+    }
+    return k;
+  }
+  function forgetKey() { try { sessionStorage.removeItem('kieKey'); } catch (e) {} }
+
+  function promptFor(c) {
+    return 'Square 1:1 social media ad for HydraLift, an electrolyte drink mix. ' +
+      'Picture: ' + c.picture + ' ' +
+      'Put this headline on the image, spelled exactly: "' + c.headline + '". ' +
+      'The only words in the image are that headline and the HydraLift name. ' +
+      'Clean, professional ad layout. No real person\'s likeness, no other brands\' logos.';
+  }
+
+  function api(path, key, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ 'Authorization': 'Bearer ' + key }, opts.headers || {});
+    return fetch(KIE + path, opts).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        var code = j && j.code ? j.code : r.status;
+        if (r.status === 401 || code === 401) { var e = new Error('The Kie key was rejected. Press G to paste it again.'); e.auth = true; throw e; }
+        if (code === 402) throw new Error('Not enough Kie credits.');
+        if (!r.ok || code !== 200) throw new Error((j && j.msg) || ('HTTP ' + r.status));
+        return j.data;
+      });
+    });
+  }
+
+  function poll(taskId, key, deadline) {
+    return api('/jobs/recordInfo?taskId=' + encodeURIComponent(taskId), key).then(function (d) {
+      if (d && d.state === 'success') {
+        var res = typeof d.resultJson === 'string' ? JSON.parse(d.resultJson) : (d.resultJson || {});
+        var url = res.resultUrls && res.resultUrls[0];
+        if (!url) throw new Error('Finished without an image.');
+        return { url: url, credits: d.creditsConsumed };
+      }
+      if (d && d.state === 'fail') throw new Error(d.failMsg || 'Generation failed.');
+      if (Date.now() > deadline) throw new Error('Timed out after 4 minutes.');
+      return new Promise(function (res) { setTimeout(res, 3000); }).then(function () { return poll(taskId, key, deadline); });
+    });
+  }
+
+  function generateOne(team, key) {
+    var c = concepts[team];
+    images[team] = { state: 'working' };
+    renderImages();
+    var body = { model: MODEL, input: { prompt: promptFor(c), aspect_ratio: '1:1', quality: 'basic', output_format: 'png' } };
+    return api('/jobs/createTask', key, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (d) { return poll(d.taskId, key, Date.now() + 240000); })
+      .then(function (r) {
+        images[team] = { state: 'done', url: r.url, credits: r.credits };
+        LIVE.send('s1', { type: 'image', team: team, url: r.url, t: Date.now() }).catch(function () {});
+      })
+      .catch(function (e) {
+        images[team] = { state: 'error', msg: e.message };
+        if (e.auth) forgetKey();
+      })
+      .then(function () { renderImages(); if (view === 'reveal') renderReveal(); });
+  }
+
+  function generateAll(all) {
+    if (generating) return;
+    var teams = Object.keys(concepts).map(Number).filter(function (t) {
+      return all || !images[t] || images[t].state !== 'done';
+    });
+    show('images');
+    if (!teams.length) { setGenStatus('Every concept already has an image. Shift+G regenerates all of them.'); return; }
+    var key = kieKey();
+    if (!key) { setGenStatus('No key, nothing generated.'); return; }
+    if (!window.confirm('Generate ' + teams.length + ' image' + (teams.length > 1 ? 's' : '') + ' with Seedream 5.0 Pro? About 7 Kie credits each, about a minute.')) return;
+    generating = true;
+    document.getElementById('gen').disabled = true;
+    setGenStatus('Generating ' + teams.length + ' in parallel. About a minute.');
+    Promise.all(teams.map(function (t) { return generateOne(t, key); })).then(function () {
+      generating = false;
+      document.getElementById('gen').disabled = false;
+      var done = teams.filter(function (t) { return images[t].state === 'done'; });
+      var spent = done.reduce(function (s, t) { return s + (Number(images[t].credits) || 0); }, 0);
+      var failed = teams.length - done.length;
+      setGenStatus(done.length + ' generated' + (spent ? ', ' + spent + ' credits' : '') + (failed ? '. ' + failed + ' failed: press G to retry those.' : '.'));
+    });
+  }
+  function setGenStatus(s) { document.getElementById('genStatus').textContent = s; }
+
+  function renderImages() {
+    var html = '';
+    for (var i = 1; i <= 6; i++) {
+      var lbl = 'C' + i, team = perm[i - 1], c = concepts[team], im = images[team] || {};
+      var inner;
+      if (!c) inner = '<div class="ph">no concept yet</div>';
+      else if (im.state === 'done') inner = '<img src="' + E(im.url) + '" alt="Generated image for ' + lbl + '">';
+      else if (im.state === 'working') inner = '<div class="ph">generating…</div>';
+      else if (im.state === 'error') inner = '<div class="ph err">' + E(im.msg) + '</div>';
+      else inner = '<div class="ph">not generated</div>';
+      html += '<div class="tile' + (revealedVotes && c ? ' ' + kindOf(team).toLowerCase() : '') + '"><div class="lbl">' + lbl + '</div>' + inner +
+        (c ? '<p class="hl">' + E(cover(c.headline)) + '</p>' : '') + '</div>';
+    }
+    document.getElementById('tiles').innerHTML = html;
+  }
+
   function show(v) {
     view = v;
-    ['gallery', 'vote1', 'vote2', 'reveal', 'qr', 'manual'].forEach(function (x) { document.getElementById('v-' + x).classList.toggle('hidden', x !== v); });
+    if (v === 'images') renderImages();
+    ['gallery', 'vote1', 'vote2', 'reveal', 'qr', 'manual', 'images'].forEach(function (x) { document.getElementById('v-' + x).classList.toggle('hidden', x !== v); });
     Array.prototype.forEach.call(document.querySelectorAll('.bar [data-view]'), function (b) { b.classList.toggle('on', b.getAttribute('data-view') === v); });
     if (v === 'reveal') { revealedVotes = true; veilAll = false; renderGallery(); renderReveal(); }
     if (v === 'vote1' || v === 'vote2') renderVotes();
@@ -158,9 +282,11 @@
     var k = e.key.toLowerCase();
     if (k === '1') show('gallery'); else if (k === '2') show('vote1'); else if (k === '3') show('vote2'); else if (k === '4') show('reveal');
     else if (k === 'q') show('qr'); else if (k === 'm') show('manual');
+    else if (k === '5') show('images');
+    else if (k === 'g') generateAll(e.shiftKey);
     else if (k === 'v') { veilAll = !veilAll; renderGallery(); }
     else if (k === 'n') { coverName = !coverName; renderGallery(); renderReveal(); }
-    else if (k === 'x') LIVE.download('class10-session1-' + LIVE.key + '.json', { concepts: concepts, votes1: votes1, votes2: votes2, labels: perm });
+    else if (k === 'x') LIVE.download('class10-session1-' + LIVE.key + '.json', { concepts: concepts, votes1: votes1, votes2: votes2, labels: perm, images: images });
   });
   document.getElementById('mAdd').addEventListener('click', function () {
     var team = Number(document.getElementById('mTeam').value);
@@ -169,6 +295,7 @@
     renderGallery(); show('gallery');
   });
   document.getElementById('mClose').addEventListener('click', function () { show('gallery'); });
+  document.getElementById('gen').addEventListener('click', function (e) { generateAll(e.shiftKey); });
 
   var voteUrl = (window.SITE_URL || (location.origin + location.pathname.replace(/s1\/.*$/, ''))) + 's1/vote.html' + (LIVE.key !== window.LIVE_KEY ? '?k=' + LIVE.key : '');
   document.getElementById('urlVote').textContent = voteUrl.replace(/^https?:\/\//, '');
@@ -179,6 +306,10 @@
     if (d.type === 'concept' && d.team >= 1 && d.team <= 6) { concepts[d.team] = d; renderGallery(); if (view === 'reveal') renderReveal(); }
     else if (d.type === 'vote1' && Array.isArray(d.picks) && d.picks.length === 3) { votes1.push(d); if (view === 'vote1') renderVotes(); }
     else if (d.type === 'vote2' && d.pick) { votes2.push(d); if (view === 'vote2') renderVotes(); }
+    else if (d.type === 'image' && d.team >= 1 && d.team <= 6 && /^https:\/\//.test(d.url || '')) {
+      if (!images[d.team] || images[d.team].state !== 'working') images[d.team] = { state: 'done', url: d.url };
+      if (view === 'images') renderImages(); if (view === 'reveal') renderReveal();
+    }
   }, function (s) { st.textContent = s === 'live' ? 'live' : s === 'polling' ? 'polling every 15 s' : 'relay offline (press M to add by hand)'; st.className = 'status ' + (s === 'live' ? 'live' : s === 'offline' ? 'off' : ''); });
   renderGallery();
 })();

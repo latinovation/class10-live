@@ -79,6 +79,17 @@ body.board .card { background: #fff; color: var(--ink); }
 .cards .c.a { border-top: 10px solid #e0a040; }
 .cards .c.b { border-top: 10px solid var(--teal); }
 .cards .c.veil h3, .cards .c.veil .body, .cards .c.veil .pic { filter: blur(7px); }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.tile { background: #fff; color: var(--ink); border-radius: 12px; padding: 12px; position: relative; }
+.tile.a { border-top: 10px solid #e0a040; }
+.tile.b { border-top: 10px solid var(--teal); }
+.tile .lbl { position: absolute; top: 18px; left: 22px; font-weight: 800; color: #fff; background: rgba(31,58,95,.85); border-radius: 6px; padding: 2px 8px; z-index: 1; }
+.tile img, .tile .ph { display: block; width: 100%; aspect-ratio: 1 / 1; max-height: 34vh; object-fit: contain; border-radius: 8px; background: #eef2f1; }
+.tile .ph { display: flex; align-items: center; justify-content: center; text-align: center; padding: 12px; color: var(--muted); font-weight: 600; }
+.tile .ph.err { color: var(--warn); }
+.tile .hl { margin: 8px 0 0; font-weight: 700; color: var(--navy); font-size: 1rem; line-height: 1.25; }
+.card img.thumb { float: right; width: 120px; height: 120px; object-fit: cover; border-radius: 8px; margin: 0 0 6px 10px; }
+.btn:disabled { cursor: progress; }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .split .col { background: #fff; color: var(--ink); border-radius: 12px; padding: 18px 20px; }
 .split .col h2 { margin-top: 0; }
